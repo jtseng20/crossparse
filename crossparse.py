@@ -42,14 +42,22 @@ def processImage(INPUT, OUTPUT, DEBUG, VERBOSE):
     thresh = noNums[TL[1] : BR[1] + 1, TL[0] : BR[0] + 1]
 
     boxcnts, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    out = np.zeros((thresh.shape[0], thresh.shape[1], 3), dtype = np.uint8)
+    out = image[TL[1] : BR[1] + 1, TL[0] : BR[0] + 1]
     for c in boxcnts:
-        cv2.drawContours(out, [c], -1, (0, 255, 0), 2)
+        cv2.drawContours(out, [c], -1, (0, 255, 0), 1)
+    
+    while DEBUG:
+        cv2.imshow("Press any key to close", out)
+        key = cv2.waitKey(1)
+        if key != -1:
+            break
 
     goodContours = [cv2.contourArea(c) for c in boxcnts if cv2.isContourConvex(c)]
-    sideLen = int((sum(goodContours) / len(goodContours)) ** 0.5) + 3 + GAPWIDTH # accounting for dilation (+2) and the not-included upper edge (+1)
+    
+    sideLen = int((sum(goodContours) / len(goodContours)) ** 0.5) + 2 + GAPWIDTH # accounting for dilation (+2) and the not-included upper edge (+1)
     HEIGHT, WIDTH = thresh.shape[0] // sideLen, thresh.shape[1] // sideLen
     if VERBOSE:
+        print ("Box size: " + str(sideLen))
         print("Estimated Dimensions: " + str(HEIGHT) + " x " + str(WIDTH))
     sideLen = ( thresh.shape[0] / HEIGHT + thresh.shape[1] / WIDTH ) / 2
     workbook = xlsxwriter.Workbook(OUTPUT)
@@ -57,14 +65,14 @@ def processImage(INPUT, OUTPUT, DEBUG, VERBOSE):
         
     for i in range(HEIGHT):
         for j in range(WIDTH):
-            color = image[int((i+0.8) * sideLen),int((j+0.8) * sideLen)][::-1]
-            cv2.circle(image, (int((j+0.8) * sideLen),int((i+0.8) * sideLen)), 10, (255,255,0), 2)
+            color = out[int((i+0.5) * sideLen),int((j+0.5) * sideLen)][::-1]
+            cv2.circle(out, (int((j+0.5) * sideLen),int((i+0.5) * sideLen)), 10, (255,255,0), 2)
             cell_format = workbook.add_format({'bold': True, 'bg_color': rgb_to_hex(tuple(color)), 'border_color': 'black', 'border': 1})
             worksheet.write(i, j, "", cell_format)
 
          
     while DEBUG:
-        cv2.imshow("Press any key to close", image)
+        cv2.imshow("Press any key to close", out)
         key = cv2.waitKey(1)
         if key != -1:
             break
