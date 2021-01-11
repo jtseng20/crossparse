@@ -43,8 +43,9 @@ def processImage(INPUT, OUTPUT, DEBUG, VERBOSE):
 
     boxcnts, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     out = image[TL[1] : BR[1] + 1, TL[0] : BR[0] + 1]
-    for c in boxcnts:
-        cv2.drawContours(out, [c], -1, (0, 255, 0), 1)
+    if DEBUG:
+        for c in boxcnts:
+            cv2.drawContours(out, [c], -1, (0, 255, 0), 1)
     
     while DEBUG:
         cv2.imshow("Press any key to close", out)
