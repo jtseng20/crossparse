@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 import xlsxwriter
 import argparse
+from imutils import contours
 
-GAPWIDTH = 2
 colors = [(255,0,0),(0,255,0), (0,0,255), (255,255,0),(0,255,255), (255,0,255)]
 
 def rgb_to_hex(rgb):
@@ -43,24 +43,58 @@ def processImage(INPUT, OUTPUT, DEBUG, VERBOSE):
 
     boxcnts, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     out = image[TL[1] : BR[1] + 1, TL[0] : BR[0] + 1]
-    if DEBUG:
-        for c in boxcnts:
-            cv2.drawContours(out, [c], -1, (0, 255, 0), 1)
+
+    goodContours = [(c) for c in boxcnts if cv2.isContourConvex(c)]
+    goodContours, _ = contours.sort_contours(goodContours, method="top-to-bottom")
+    rects = [np.int0(cv2.boxPoints(cv2.minAreaRect(c))) for c in goodContours]
+    
+    
+    rows = []
+    currentRow = []
+    counter = 0
+    currentHeight = 0
+    while counter < len(rects):
+        if len(currentRow):
+            TL, BR = getCorners(rects[counter])
+            if abs(TL[1] - currentHeight) <= 10:
+                currentRow.append(np.mean([TL, BR], 0))
+                counter += 1
+            else:
+                rows.append(currentRow[:])
+                currentRow = []
+        else:
+            TL, BR = getCorners(rects[counter])
+            currentRow.append(np.mean([TL,BR], 0))
+            currentHeight = TL[1]
+            counter += 1
+    rows.append(currentRow)
+    rows = [sorted(row, key = lambda e: e[0]) for row in rows]
+    #print(*rows, sep="\n")
+    debugOutput = np.copy(out)
+    for row in rows:
+        for i in range(len(row)):
+            cv2.circle(debugOutput, (int(row[i][0]), int(row[i][1])), 10, (255,255,0), 2)
+    
+    minVal = out.shape[1]
+    maxVal = 0
+    for row in rows:
+        maxVal = max(row[len(row) - 1][0] - row[0][0], maxVal)
+        for i in range(len(row) - 1):
+            minVal = min(row[i+1][0] - row[i][0], minVal)
+    
+    HEIGHT, WIDTH = round(out.shape[0] / minVal), round(out.shape[1] / minVal)
     
     while DEBUG:
-        cv2.imshow("Press any key to close", out)
+        cv2.imshow("Press any key to close", debugOutput)
         key = cv2.waitKey(1)
         if key != -1:
             break
-
-    goodContours = [cv2.contourArea(c) for c in boxcnts if cv2.isContourConvex(c)]
     
-    sideLen = int((sum(goodContours) / len(goodContours)) ** 0.5) + 2 + GAPWIDTH # accounting for dilation (+2) and the not-included upper edge (+1)
-    HEIGHT, WIDTH = thresh.shape[0] // sideLen, thresh.shape[1] // sideLen
+    sideLen = ( thresh.shape[0] / HEIGHT + thresh.shape[1] / WIDTH ) / 2
     if VERBOSE:
+        print(thresh.shape)
         print ("Box size: " + str(sideLen))
         print("Estimated Dimensions: " + str(HEIGHT) + " x " + str(WIDTH))
-    sideLen = ( thresh.shape[0] / HEIGHT + thresh.shape[1] / WIDTH ) / 2
     workbook = xlsxwriter.Workbook(OUTPUT)
     worksheet = workbook.add_worksheet()
         
